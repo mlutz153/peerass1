@@ -1,0 +1,100 @@
+---
+title: "Untitled"
+author: "Matt Lutz"
+date: "Sunday, April 19, 2015"
+output: html_document
+---
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+```{r firstchunk, echo = TRUE}
+url <- "http://d396qusza40orc.cloudfront.net/repdata%2Fdata%2Factivity.zip"
+download.file(url, "repdata-data-activity.zip", mode="wb")
+data <- unzip("repdata-data-activity.zip")
+data <- read.csv(data)
+
+library(plyr)
+library(dplyr)
+library(lubridate)
+x<-ymd(data$date)
+y<-select(data,-date)
+data<-cbind(x,y)
+colnames(data)<-c("date","steps","interval")
+stepsum <- aggregate(steps ~ date, data = data, sum)
+colnames(stepsum) <- c("date", "totalsteps")
+```
+
+*Average steps per day:
+```{r avgstepsperdayv}
+stepmean <- aggregate(steps ~ date, data = data, mean)
+
+colnames(stepmean) <- c("date", "avgSteps")
+stepmean
+```
+*Median steps per day:
+```{r medianstepsperday, echo = TRUE}
+stepmedian <- aggregate(steps ~ date, data = data, median)
+stepmedian
+```
+
+```{r secondchunk, echo = FALSE, fig.height = 4, echo = TRUE}
+stepintervalmean <- aggregate(steps ~ interval, data = data, mean)
+colnames(stepintervalmean) <- c("interval", "avgSteps")
+plot(stepintervalmean$interval, stepintervalmean$avgSteps, main = "Avg Steps by Time Interval", xlab = "time interval(min)", ylab = "avgSteps", type = "l" )
+library(data.table)
+stepintervalmean <- arrange(data.table(stepintervalmean), desc(avgSteps))
+head(stepintervalmean)
+
+```
+
+Number of missing values:
+```{r numberofnas, echo = TRUE}
+sum(is.na(data$steps))
+```
+
+```{r missingvalues, echo = TRUE}
+combo <- merge(data, stepintervalmean)
+combo$steps[is.na(combo$steps)] <- combo$avgSteps[is.na(combo$steps)]
+combo$avgSteps <- NULL
+combostepsum <- aggregate(steps ~ date, data = combo, sum)
+colnames(combostepsum) <- c("date", "totalsteps")
+hist(combostepsum$totalsteps, main = "Freq of Steps (NA's AVG'd per day)", xlab = "steps per day (NAs AVG'd per day)")
+```
+
+Mean comparison with NA's avg'd per day:
+```{r meanNasAvgd, echo = TRUE}
+combostepmean <- aggregate(steps ~ date, data = combo, mean)
+colnames(combostepmean) <- c("date", "avgStepsNoNAs")
+stepmean <- aggregate(steps ~ date, data = data, mean, na.action = na.pass)
+stepmean[is.na(stepmean)] <- 0
+colnames(stepmean) <- c("date", "avgSteps")
+combo2 <- merge(combostepmean, stepmean)
+combo2 <- mutate(combo2, "difference" = abs(avgStepsNoNAs- avgSteps))
+combo2
+```
+
+```{r weekdays, fig.height = 4, echo = TRUE}
+library(lubridate)
+combo3 <- mutate(combo, "weekdays" = weekdays(ymd(date)))
+library(data.table)
+combo3 <- data.table(combo3)
+wkdays <- filter(combo3, weekdays != "Saturday")
+wkdays <- filter(wkdays, weekdays != "Sunday")
+wkdays <- aggregate(steps ~ interval, data = wkdays, mean)
+wkends <- filter(combo3, weekdays != "Monday")
+wkends <- filter(wkends, weekdays != "Tuesday")
+wkends <- filter(wkends, weekdays != "Wednesday")
+wkends <- filter(wkends, weekdays != "Thursday")
+wkends <- filter(wkends, weekdays != "Friday")
+wkends <- aggregate(steps ~ interval, data = wkends, mean)
+
+
+source('Multiplot.R')
+library(ggplot2)
+
+wkdayplot <- qplot(interval, steps, data = wkdays, main = "WEEKDAYS")+geom_line()
+wkendplot <- qplot(interval, steps, data = wkends, main = "WEEKENDS")+geom_line()
+multiplot(wkdayplot, wkendplot, cols = 1)
+```
